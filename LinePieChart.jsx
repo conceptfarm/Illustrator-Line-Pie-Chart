@@ -1,4 +1,6 @@
-﻿// GENERAL FUNCTIONS
+﻿// @target illustrator
+// @targetengine transient
+// GENERAL FUNCTIONS
 function degToRad(degrees)
 {
     return degrees * (Math.PI/180);
@@ -10,7 +12,35 @@ function colorFromRGB (r,g,b)
     result.red = r;
     result.green= g;
     result.blue = b;
-    return result
+    return result;
+}
+
+function polarToCart(cx, cy, radius, theta)
+{
+/*
+
+TextFrameItem.transform()
+app.activeDocument.textFrames[index].transform(transformationMatrix[, changePositions][, changeFillPatterns][, changeFillGradients][, changeStrokePattern][, changeLineWidths][, transformAbout])
+
+transformAbout    
+Transformation.BOTTOM
+Transformation.BOTTOMLEFT
+Transformation.BOTTOMRIGHT
+
+Transformation.LEFT
+Transformation.RIGHT
+
+Transformation.TOP
+Transformation.TOPLEFT
+Transformation.TOPRIGHT
+*/
+    theta = degToRad(theta);
+    
+    var x = cx + (radius * Math.cos(theta));
+    var y = cy + (radius * Math.sin(theta));
+    // illustrator y coordinates are flipped
+    //var moveMatrix = app.getTranslationMatrix(x,-y,Transformation.TOPRIGHT);    
+    return [x,y];    
 }
 
 function computeArc(cx, cy,  startA, radius, theta)
@@ -105,7 +135,6 @@ function drawArc(doc, cx, cy,  startA, radius, theta)
 {
     // split angles into sections of no more than 90 degrees
     var angles = splitAngle(theta, startA);
-    $.writeln(angles);
     
     // calculate each individual arc section
     var listOfArcPoints = [];    
@@ -169,11 +198,65 @@ function drawArc(doc, cx, cy,  startA, radius, theta)
     return arcObj;
 }
 
+function drawText(cx, cy, radius, theta, textString)
+{
+    var textPos = polarToCart(cx, cy, radius, theta);
+    var nt = doc.textFrames.add();
+    nt.contents  = textString;
+    nt.fillColor = arcColour;
+    
+    var offset = getAnchor (theta, nt);
+    $.writeln(offset);
+    applyParaStyle(nt, offset[1]);
+
+    nt.left = textPos[0] - offset[0][0];
+    nt.top = textPos[1] + offset[0][1];
+
+    return nt;
+    
+}
+
+function applyParaStyle(textBox, style)
+{
+    var iCount = textBox.paragraphs.length;
+    for (var i = 0; i < iCount; i++) {
+        var paraAttr_0 = textBox.paragraphs[i].paragraphAttributes;
+        paraAttr_0.justification = style;
+    }
+}
+
+function getAnchor(theta, textBox) 
+{
+    var thisTrans = [[0,0], Justification.LEFT];
+    $.writeln(theta);
+    switch(true) 
+    {
+        case ((theta > 0 && theta < 5) || (theta > 355 && theta < 360)) : thisTrans = [[0, textBox.height/2.0], Justification.LEFT] ; break;
+
+        case (theta > 5 && theta < 85) : thisTrans = [[0, textBox.height], Justification.LEFT] ; break;
+
+        case (theta > 85 && theta < 95) : thisTrans = [[textBox.width/2.0, textBox.height], Justification.CENTER] ; break;
+
+        case (theta > 95 && theta < 175) : thisTrans = [[textBox.width, textBox.height], Justification.RIGHT] ; break;
+
+        case (theta > 175 && theta < 185) : thisTrans = [[textBox.width, textBox.height/2.0], Justification.RIGHT] ; break;
+
+        case (theta > 185 && theta < 265) : thisTrans = [[textBox.width, 0], Justification.RIGHT] ; break;
+
+        case (theta > 265 && theta < 275) : thisTrans = [[textBox.width/2.0, 0], Justification.CENTER] ; break;
+
+        case (theta > 275 && theta < 355) : thisTrans = [[0, 0], Justification.LEFT] ; break;
+    }
+
+    return thisTrans;
+}
+
+
 
 // Takes list of values of each pie and a spacer angle
 // Returns list of start angle and theta for each pie value
 function getPieAngles(vals, spacer)
-{
+{ 
     function getArraySum(a)
     {
         var total=0;
@@ -215,9 +298,9 @@ function splitAngle(angle, startAngle)
 
 if (app.documents.length > 0) {
     
-    var vals = [5, 25, 15, 8];
+    var vals = [14,2,12,6,10];
     
-    var spacer = 5.0; // space between pie peices in degrees
+    var spacer = 11.0; // space between pie peices in degrees
     var cx = 0.0;
     var cy = 0.0;
     var radius = 150.0;
@@ -233,6 +316,20 @@ if (app.documents.length > 0) {
     {
         var arc = drawArc (doc, cx, cy,  pieAngles[i][0], radius, pieAngles[i][1]);
         arc.fillColor = noColor; 
-        arc.strokeColor = colorFromRGB(Math.random()*256,Math.random()*256,Math.random()*256);
+        var arcColour =  colorFromRGB(Math.random()*255,Math.random()*255,Math.random()*255);
+        arc.strokeColor = arcColour;
+        
+        var textString = ("index: " + i + " value: " + vals[i] + "\nstart " + pieAngles[i][0] + "\npie angle: " + pieAngles[i][1]);
+        var nt = drawText(cx, cy, radius, (pieAngles[i][0] + pieAngles[i][1]/2.0), textString)
+        /*
+        var textPos = polarToCart(cx, cy, radius, (pieAngles[i][0] + pieAngles[i][1]/2.0));
+        var nt = doc.textFrames.add();
+        nt.contents  = ("index: " + i + " value: " + vals[i] + "\nstart " + pieAngles[i][0] + "\npie angle: " + pieAngles[i][1] + "\nxy " + textPos[0] +"\ny " + textPos[1]);
+        nt.fillColor = arcColour;
+             
+        nt.left = textPos[0];
+        nt.top = textPos[1];
+        */
+        
     }
 }
