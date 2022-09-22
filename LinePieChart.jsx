@@ -1,11 +1,28 @@
-﻿// @target illustrator
-// @targetengine transient
-// GENERAL FUNCTIONS
+﻿// TODO: 
+
+///////////////////////
+// GENERAL FUNCTIONS //
+///////////////////////
 function degToRad(degrees)
 {
     return degrees * (Math.PI/180);
 }
 
+function radToDeg(rads)
+{
+    return rads * (180.0/Math.PI);
+}
+
+function getArraySum(a)
+{
+    var total=0;
+    for(var i in a) { 
+        total += a[i];
+    }
+    return total;
+} 
+
+// Colour object from r g b values 0-255
 function colorFromRGB (r,g,b)
 {
     var result = new RGBColor();
@@ -15,34 +32,241 @@ function colorFromRGB (r,g,b)
     return result;
 }
 
+///////////////////////////
+// GEOMETRY CALCULATIONS //
+///////////////////////////
+
+// Polar to Cartesian conversion
+// radius: circle radius
+// theta: polar coordinate in degrees
+// cx: x value of circle centre
+// cy: y value of circle centre
+// Return an object with x and y members cartesian coordinates
 function polarToCart(cx, cy, radius, theta)
 {
-/*
-
-TextFrameItem.transform()
-app.activeDocument.textFrames[index].transform(transformationMatrix[, changePositions][, changeFillPatterns][, changeFillGradients][, changeStrokePattern][, changeLineWidths][, transformAbout])
-
-transformAbout    
-Transformation.BOTTOM
-Transformation.BOTTOMLEFT
-Transformation.BOTTOMRIGHT
-
-Transformation.LEFT
-Transformation.RIGHT
-
-Transformation.TOP
-Transformation.TOPLEFT
-Transformation.TOPRIGHT
-*/
     theta = degToRad(theta);
     
     var x = cx + (radius * Math.cos(theta));
     var y = cy + (radius * Math.sin(theta));
-    // illustrator y coordinates are flipped
-    //var moveMatrix = app.getTranslationMatrix(x,-y,Transformation.TOPRIGHT);    
-    return [x,y];    
+
+    return {"x": x, "y": y};    
 }
 
+// Finds Circle Line Intersection
+// radius: circle radius
+// theta: line direction in degrees
+// cx: x value of circle centre
+// cy: y value of circle centre
+// n: y-intercept
+// Return an object with x and y members for the intersection
+function findCircleLineIntersections( cx, cy, radius, theta, n) 
+{
+    // circle: (x - cx)^2 + (y - cy)^2 = radius^2
+    // line: y = m * x + n
+    // m: slope
+    var m = Math.tan(degToRad(theta));
+
+    // get a, b, c values
+    var a = 1.0 + (m*m);
+    var b = -cx * 2.0 + (m * (n - cy)) * 2.0;
+    var c = (cx*cx) + ((n - cy)*(n - cy)) - (radius*radius);
+
+    // get discriminant
+    var d = (b*b) - 4.0 * a * c;
+   
+    if (d >= 0) {
+        // insert into quadratic formula
+        var x1 = (-b + Math.sqrt((b*b) - 4.0 * a * c)) / (2.0 * a);
+        var y1 = m*x1 + n;
+        var x2 = (-b - Math.sqrt((b*b) - 4.0 * a * c)) / (2.0 * a)
+        var y2 = m*x2 + n;
+        var intersections = { "x": x1,"y": y1 };
+        
+        if (theta > 90 && theta < 270)
+        {
+            intersections = { "x": x2,"y": y2 };
+        }
+        
+        if (d == 0) {
+            // only 1 intersection
+            return { "x": x1,"y": y1 };
+        }
+
+        return intersections;
+    }
+    // no intersection
+    return [];
+}
+
+
+// Finds the intersection point between
+// the rectangle with parallel sides to the x and y axes 
+// and the half-line pointing towards (x,y)
+// originating from the centre of the rectangle
+
+// x:Number x coordinate of point to build the half-line from
+// y:Number y coordinate of point to build the half-line from
+// cx:Number x coordinate center of the rectangle
+// cy:Number y coordinate center of the rectangle
+// w:Number the width of the rectangle
+// h:Number the height of the rectangle
+// Return an object with x and y members for the intersection
+
+// http://stackoverflow.com/a/31254199/253468 source
+// http://stackoverflow.com/a/18292964/253468 based on
+
+function findRectLineIntersection(cx, cy, w, h, x, y) 
+{
+    var minX = cx - w/2.0; // left
+    var maxX = cx + w/2.0; // right
+    var minY = cy - h/2.0; // top
+    var maxY = cy + h/2.0; // bottom
+
+	var midX = (minX + maxX) / 2.0;
+	var midY = (minY + maxY) / 2.0;
+	// if (midX - x == 0) -> m == ±Inf -> minYx/maxYx == x (because value / ±Inf = ±0)
+	var m = (midY - y) / (midX - x);
+
+	if (x <= midX) 
+    { // check "left" side
+		var minXy = m * (minX - x) + y;
+		if (minY <= minXy && minXy <= maxY)
+			return {"x": minX, "y": minXy};
+	}
+
+	if (x >= midX) 
+    { // check "right" side
+		var maxXy = m * (maxX - x) + y;
+		if (minY <= maxXy && maxXy <= maxY)
+			return {"x": maxX, "y": maxXy};
+	}
+
+	if (y <= midY) 
+    { // check "top" side
+		var minYx = (minY - y) / m + x;
+		if (minX <= minYx && minYx <= maxX)
+			return {"x": minYx, "y": minY};
+	}
+
+	if (y >= midY) 
+    { // check "bottom" side
+		var maxYx = (maxY - y) / m + x;
+		if (minX <= maxYx && maxYx <= maxX)
+			return {"x": maxYx, "y": maxY};
+	}
+
+	// edge case when finding midpoint intersection: m = 0/0 = NaN
+	if (x === midX && y === midY) return {"x": x, "y": y};
+
+	// Should never happen :) If it does, please tell me!
+	throw "Cannot find intersection for " + [x,y]
+	    + " inside rectangle " + [minX, minY] + " - " + [maxX, maxY] + ".";
+}
+
+// Finds the intersection point between
+// the rounded rectangle with parallel sides to the x and y axes 
+// and the half-line pointing towards (x,y)
+// originating from the centre of the rectangle
+
+// x:Number x coordinate of point to build the half-line from
+// y:Number y coordinate of point to build the half-line from
+// cx:Number x coordinate center of the rectangle
+// cy:Number y coordinate center of the rectangle
+// radius: radius of the rounded corners
+// theta: direction of line pointing from the centre out in degrees
+// w:Number the width of the flat sections of rectangle
+// h:Number the height of the flat sections of rectangle
+// w, h are inner box dimesions
+// the overall dimension is r + w + r / r + h + r
+// Return an object with x and y members for the intersection
+
+function findRoundedBoxLineIntersection (cx, cy, w, h, radius, theta, debug)
+{
+    var intersectionPoints;
+
+    // get angle at which the side becomes flat
+    var flatAngle = radToDeg(Math.atan(w/2.0)/(w/2.0+radius));
+       
+    // arbitrary length line to calculate intersection
+    var lineEndPoint = polarToCart(0, 0, (radius*1.5), theta); 
+
+    switch(true) 
+    {
+        // flat sides
+        case ((theta > 0 && theta < flatAngle) || 
+        (theta > 360-flatAngle && theta < 360) || 
+        (theta > 90-flatAngle && theta < 90+flatAngle) || 
+        (theta > 180-flatAngle && theta < 180+flatAngle) ||
+        (theta > 270-flatAngle && theta < 270+flatAngle)) : 
+        {
+            var tempIntersectionPoints = findRectLineIntersection(0, 0, (w+2*radius), (w+2*radius), lineEndPoint['x'], lineEndPoint['y']) 
+            intersectionPoints = {"x": tempIntersectionPoints["x"] + cx , "y": tempIntersectionPoints["y"] + cy };
+            break;
+        }
+       
+        // upper right
+        case (theta > flatAngle && theta < 90-flatAngle) : 
+        {
+            var tempIntersectionPoints = findCircleLineIntersections( w/2.0, w/2.0, radius, theta, 0.0)
+            intersectionPoints = {"x": tempIntersectionPoints["x"] + cx , "y": tempIntersectionPoints["y"] + cy };
+            break;
+        }
+        
+        // upper left
+        case (theta > 90+flatAngle && theta < 180-flatAngle) :         
+        {
+            var tempIntersectionPoints = findCircleLineIntersections( -w/2.0, w/2.0, radius, theta, 0.0)
+            intersectionPoints = {"x": tempIntersectionPoints["x"] + cx , "y": tempIntersectionPoints["y"] + cy };
+            break;
+        }
+       
+        // lower left
+        case (theta > 180+flatAngle && theta < 270-flatAngle) :         
+        {
+            var tempIntersectionPoints = findCircleLineIntersections( -w/2.0, -w/2.0, radius, theta, 0.0)
+            intersectionPoints = {"x": tempIntersectionPoints["x"] + cx , "y": tempIntersectionPoints["y"] + cy };
+            break;
+        }
+       
+        // lower right
+        case (theta > 270+flatAngle && theta < 360-flatAngle) :         
+        {
+            var tempIntersectionPoints = findCircleLineIntersections( w/2.0, -w/2.0, radius, theta, 0.0)
+            intersectionPoints = {"x": tempIntersectionPoints["x"] + cx , "y": tempIntersectionPoints["y"] + cy };
+            break;
+        }
+    }
+    if (debug)
+    {
+        var doc = app.activeDocument;
+        var noColor = new NoColor();
+        var lineObj = doc.pathItems.add(); 
+
+        newPoint = lineObj.pathPoints.add();              
+        newPoint.leftDirection = [ cx, cy ]; 
+        newPoint.anchor = [cx, cy ];
+        newPoint.rightDirection = [ cx, cy ];
+
+        newPoint = lineObj.pathPoints.add();
+        newPoint.leftDirection = [ lineEndPoint['x'] + cx, lineEndPoint['y'] + cy ];
+        newPoint.anchor = [ lineEndPoint['x'] + cx, lineEndPoint['y'] + cy ];
+        newPoint.rightDirection = [ lineEndPoint['x'] + cx, lineEndPoint['y'] + cy ];
+        
+        var roundBox = doc.pathItems.roundedRectangle(cy + (radius*2+w)/2, cx - (radius*2+w)/2, radius*2.0+w, radius*2.0+h, radius, radius);    
+        roundBox.strokeColor = colorFromRGB(0,0,255);
+        roundBox.fillColor = noColor; 
+        
+        x = intersectionPoints["x"];
+        y = intersectionPoints["y"];
+        $.writeln(x);
+        $.writeln(y);
+        var testEllipse = doc.pathItems.ellipse( (y + .5), (x - .5), (2*.5), (2*.5));    
+    }
+    return intersectionPoints;
+}
+
+// Computes an approximation of an arc as bezier curve
+// Returns an array of 4 points (8 values)
 function computeArc(cx, cy,  startA, radius, theta)
 {
     // clockwise arc
@@ -92,15 +316,17 @@ function computeArc(cx, cy,  startA, radius, theta)
     py3 = cy + radius*ry3;
         
     // p1Ax, p1Ay, p1Cx , p1Cy, p2Cx, p2Cy, p2Ax, p2Ay    
-    //return [px0,py0,px1,py1,px2,py2,px3,py3];
+    // return [px0,py0,px1,py1,px2,py2,px3,py3];
     // reverse the points
     return [px3,py3,px2,py2,px1,py1,px0,py0];
 }
 
+// Welds arc sections
+// Returns a stream of bezier points
+// p1Ax, p1Ay, p1CLx, p1CLy, p2CLx, p2CLy, p2Ax, p2Ay, p2CRx, p2CRy ,      p3CLx, p3CLy , p3Ax, p3Ay, p      .....
+// encoding 10, 6, 6, 6, 6
 function weldArcSections(listOfArcPoints)
 {
-    //p1Ax, p1Ay, p1CLx, p1CLy, p2CLx, p2CLy, p2Ax, p2Ay, p2CRx, p2CRy ,      p3CLx, p3CLy , p3Ax, p3Ay, p      .....
-    // encoding 10, 6, 6, 6, 6
     var result = [];
     for (var i=0; i< listOfArcPoints.length; i++)
     {
@@ -124,14 +350,12 @@ function weldArcSections(listOfArcPoints)
         
         result = result.concat(nextControlPoint);
     }
-
     return result;
 }
 
-
-
-
-function drawArc(doc, cx, cy,  startA, radius, theta)
+// Draw the actual arc using parameters
+// Returns the arc object
+function drawArc(doc, cx, cy, startA, radius, theta)
 {
     // split angles into sections of no more than 90 degrees
     var angles = splitAngle(theta, startA);
@@ -167,6 +391,7 @@ function drawArc(doc, cx, cy,  startA, radius, theta)
     newPoint = arcObj.pathPoints.add();
     newPoint.leftDirection = [ pointStream[4], pointStream[5] ];
     newPoint.anchor = [ pointStream[6], pointStream[7]] ;
+    
     if (pointStream[8] != null)
     {
         newPoint.rightDirection = [ pointStream[8],pointStream[9] ];
@@ -198,89 +423,134 @@ function drawArc(doc, cx, cy,  startA, radius, theta)
     return arcObj;
 }
 
-function drawText(cx, cy, radius, theta, textString)
+// Takes center of the pie, radius, angle and text string and colour
+// Draws the text based on angle polar position
+// Returns text box object
+function drawText(doc, cx, cy, radius, theta, textString, textColour)
 {
-    var textPos = polarToCart(cx, cy, radius, theta);
-    var nt = doc.textFrames.add();
-    nt.contents  = textString;
-    nt.fillColor = arcColour;
+    // Additional text padding away from the pie
+    // chart in percent of radius 
+    var textOffset = 1.03;
+    var textBox = doc.textFrames.add();
+    textBox.contents  = textString;
+    applyCharSize(textBox, (0.1*radius));
+    applyCharColour(textBox, textColour);
     
-    var offset = getAnchor (theta, nt);
-    $.writeln(offset);
-    applyParaStyle(nt, offset[1]);
-
-    nt.left = textPos[0] - offset[0][0];
-    nt.top = textPos[1] + offset[0][1];
-
-    return nt;
+    // Get textbox inscribe radius after text sizing
+    var textInscribeRadius = Math.sqrt(Math.pow(textBox.width/2.0, 2) + Math.pow(textBox.height/2.0, 2))
+        
+    // Assign paragraph style before the final position
+    // Paragraph style changes the anchor point of the text box
+    var justificationStyle = getAnchor (theta, textBox);
+    applyParaStyle(textBox, justificationStyle["style"]);
     
+    // To calculate a touching rectangle centre against a circle we calculate
+    // the rounded box with flats the width of the rectange and radius corners
+    // the size of the circle we try to touch
+    var textBoxPos = findRoundedBoxLineIntersection (cx, cy, textBox.height, textBox.height, radius*textOffset, theta, false);
+       
+    textBox.left = textBoxPos["x"]- justificationStyle["x"]; 
+    textBox.top = textBoxPos["y"] + justificationStyle["y"]; 
+
+    return textBox;
 }
 
+// Takes text box and justification paragraph style
+// No return, just assigns the style
 function applyParaStyle(textBox, style)
 {
     var iCount = textBox.paragraphs.length;
-    for (var i = 0; i < iCount; i++) {
-        var paraAttr_0 = textBox.paragraphs[i].paragraphAttributes;
-        paraAttr_0.justification = style;
+    for (var i = 0; i < iCount; i++) 
+    {
+        textBox.paragraphs[i].paragraphAttributes.justification = style;
     }
 }
 
+// Takes text box and rgb colour object 
+// No return, just assigns the colour to the text
+function applyCharColour(textBox, colour)
+{
+    var iCount = textBox.textRange.characters.length;
+    for (var i = 0; i < iCount; i++) 
+    {
+        textBox.textRange.characters[i].characterAttributes.fillColor = colour;
+    }
+}
+
+// Takes text box and size in points
+// No return, just assigns the size to the text
+function applyCharSize(textBox, size)
+{
+    var iCount = textBox.textRange.characters.length;
+    for (var i = 0; i < iCount; i++) 
+    {
+        textBox.textRange.characters[i].characterAttributes.size = size;
+    }
+}
+
+// Tekes an angle of the position of the text box and text box itself
+// Returns text box offset based and text justification
+// Makes sure text is always pointing away from the center of the pie circle
 function getAnchor(theta, textBox) 
 {
-    var thisTrans = [[0,0], Justification.LEFT];
-    $.writeln(theta);
+    var justificationStyle;
+
     switch(true) 
     {
-        case ((theta > 0 && theta < 5) || (theta > 355 && theta < 360)) : thisTrans = [[0, textBox.height/2.0], Justification.LEFT] ; break;
+        case ((theta >= 0 && theta <= 90) || (theta >= 270 && theta <= 360)) : justificationStyle =  {"style": Justification.LEFT, "x": textBox.height/2.0, "y": textBox.height/2.0 }; break;
 
-        case (theta > 5 && theta < 85) : thisTrans = [[0, textBox.height], Justification.LEFT] ; break;
-
-        case (theta > 85 && theta < 95) : thisTrans = [[textBox.width/2.0, textBox.height], Justification.CENTER] ; break;
-
-        case (theta > 95 && theta < 175) : thisTrans = [[textBox.width, textBox.height], Justification.RIGHT] ; break;
-
-        case (theta > 175 && theta < 185) : thisTrans = [[textBox.width, textBox.height/2.0], Justification.RIGHT] ; break;
-
-        case (theta > 185 && theta < 265) : thisTrans = [[textBox.width, 0], Justification.RIGHT] ; break;
-
-        case (theta > 265 && theta < 275) : thisTrans = [[textBox.width/2.0, 0], Justification.CENTER] ; break;
-
-        case (theta > 275 && theta < 355) : thisTrans = [[0, 0], Justification.LEFT] ; break;
+        case (theta > 90 && theta < 270) : justificationStyle =  {"style": Justification.RIGHT, "x": textBox.width - textBox.height/2.0, "y": textBox.height/2.0 } ; break;
     }
 
-    return thisTrans;
+    return justificationStyle;
 }
+/*
+function getAnchor_old(theta, textBox) 
+{
+    var justificationStyle;
 
+    // +/- off axial angles in degrees where the text alignment is centred
+    var angleVar = 2.5; 
+    switch(true) 
+    {
+        case ((theta > 0 && theta < angleVar) || (theta > 360-angleVar && theta < 360)) : justificationStyle =  Justification.LEFT ; break;
 
+        case (theta > angleVar && theta < 90-angleVar) : justificationStyle = Justification.LEFT ; break;
+
+        case (theta > 90-angleVar && theta < 90+angleVar) : justificationStyle =  Justification.CENTER ; break;
+
+        case (theta > 90+angleVar && theta < 180-angleVar) : justificationStyle = Justification.RIGHT ; break;
+
+        case (theta > 180-angleVar && theta < 180+angleVar) : justificationStyle = Justification.RIGHT ; break;
+
+        case (theta > 180+angleVar && theta < 270-angleVar) : justificationStyle = Justification.RIGHT ; break;
+
+        case (theta > 270-angleVar && theta < 270+angleVar) : justificationStyle = Justification.CENTER ; break;
+
+        case (theta > 270+angleVar && theta < 360-angleVar) : justificationStyle = Justification.LEFT ; break;
+    }
+
+    return justificationStyle;
+}
+*/
 
 // Takes list of values of each pie and a spacer angle
 // Returns list of start angle and theta for each pie value
-function getPieAngles(vals, spacer)
+function getPieAngles(vals, sum, spacer)
 { 
-    function getArraySum(a)
-    {
-        var total=0;
-        for(var i in a) { 
-            total += a[i];
-        }
-        return total;
-    } 
-
-    var result = []
-    var sum = getArraySum(vals);
-
-     var prevStartAngle = 0;
+    var result = [];
+    var prevStartAngle = 0;
     for (var i = 0; i < vals.length; i++)
     {
-        var theta = (360*vals[i]/sum) - spacer/2.0;
-        var startAngle = prevStartAngle + spacer/2.0;
-        prevStartAngle = startAngle +  theta;
+        var theta = ((360.0-vals.length*spacer)*vals[i]/sum);
+        var startAngle = prevStartAngle + spacer/2.0; 
+        prevStartAngle = startAngle +  theta + spacer/2.0;
         result.push([startAngle, theta]);
     }
     return result;
 }
 
-// Splits arc angle into sections  of no more then 90 degrees
+// Splits arc angle into sections of no more then 90 degrees
 // Returns list of end angles of each section
 function splitAngle(angle, startAngle)
 {
@@ -296,40 +566,41 @@ function splitAngle(angle, startAngle)
     return result
 }
 
-if (app.documents.length > 0) {
-    
-    var vals = [14,2,12,6,10];
-    
-    var spacer = 11.0; // space between pie peices in degrees
-    var cx = 0.0;
-    var cy = 0.0;
-    var radius = 150.0;
-    var noColor = new NoColor();
-
-    var doc = app.activeDocument;
-    //var ellipse = doc.pathItems.ellipse(cy + radius, cx - radius, radius*2.0, radius*2.0);    
-    //ellipse.strokeColor = colorFromRGB(0,0,255);
-    
-    var pieAngles = getPieAngles(vals, spacer);
-    
-    for ( var i=0; i<pieAngles.length; i++)
+// Main function
+function createPieChart(doc, vals, spacer, cx, cy, radius, pieUnits, piePercent)
+{
+    if (app.documents.length > 0) 
     {
-        var arc = drawArc (doc, cx, cy,  pieAngles[i][0], radius, pieAngles[i][1]);
-        arc.fillColor = noColor; 
-        var arcColour =  colorFromRGB(Math.random()*255,Math.random()*255,Math.random()*255);
-        arc.strokeColor = arcColour;
+        var noColor = new NoColor();
+        //var doc = app.activeDocument;
+        //var ellipse = doc.pathItems.ellipse(cy + radius, cx - radius, radius*2.0, radius*2.0);    
+        //ellipse.strokeColor = colorFromRGB(0,0,255);
         
-        var textString = ("index: " + i + " value: " + vals[i] + "\nstart " + pieAngles[i][0] + "\npie angle: " + pieAngles[i][1]);
-        var nt = drawText(cx, cy, radius, (pieAngles[i][0] + pieAngles[i][1]/2.0), textString)
-        /*
-        var textPos = polarToCart(cx, cy, radius, (pieAngles[i][0] + pieAngles[i][1]/2.0));
-        var nt = doc.textFrames.add();
-        nt.contents  = ("index: " + i + " value: " + vals[i] + "\nstart " + pieAngles[i][0] + "\npie angle: " + pieAngles[i][1] + "\nxy " + textPos[0] +"\ny " + textPos[1]);
-        nt.fillColor = arcColour;
-             
-        nt.left = textPos[0];
-        nt.top = textPos[1];
-        */
-        
+        var valSum = getArraySum(vals);
+        var pieAngles = getPieAngles(vals, valSum, spacer);
+        var pieGroup = doc.groupItems.add();
+
+        for ( var i=0; i<pieAngles.length; i++)
+        {
+            var arc = drawArc (doc, cx, cy,  pieAngles[i][0], radius, pieAngles[i][1]);
+            arc.fillColor = noColor; 
+            var arcColour =  colorFromRGB(Math.random()*255,Math.random()*255,Math.random()*255);
+            arc.strokeColor = arcColour;
+            arc.moveToEnd(pieGroup);
+            
+            //var textString = ("index: " + i + " value: " + vals[i] + "\nstart " + pieAngles[i][0] + "\npie angle: " + pieAngles[i][1]);
+            var pieText = vals[i] +"\n" + pieUnits;
+            if (piePercent)
+            {
+                pieText = Math.floor(vals[i]/valSum * 100) + "%";
+            }
+            var nt = drawText(doc, cx, cy, radius, (pieAngles[i][0] + pieAngles[i][1]/2.0), pieText, arcColour); 
+            nt.moveToEnd(pieGroup);       
+        }
+    }
+    else
+    {
+        alert("No active document found.");
+
     }
 }
