@@ -12,19 +12,49 @@ Code for Import https://scriptui.joonas.me — (Triple click to select):
     // Pie chart functions
     #include "LinePieChart.jsx"; 
     
+    var doc = app.activeDocument;
+    
     // vars for input validation
     var pieData = true;
+    var pieDataUnits = true;
     var pieRadius = true;
     var pieX = true;
     var pieY = true;
     var pieSpacer = true;
+    var pieStroke = true;
 
     var pieDataList = [5, 10 , 30, 40, 80.5];
+    var pieDataUnitList = ["apples", "figs", "pears", "kiwis", "grapes"];
+    
+    var strokeCapList = {"Butt": StrokeCap.BUTTENDCAP, "Round": StrokeCap.ROUNDENDCAP}; 
+    var pieStrokeCap = StrokeCap.BUTTENDCAP;
 
+    var docSwatchGroups = doc.swatchGroups;
+    var pieSwatchGroups_list = ["Random Colours"];
+    var pieSwatchList = null;
+    
+    for (var i = 0; i < docSwatchGroups.length; i++)
+    {
+        var _swatchGroup = docSwatchGroups[i];
+        var _swatches = _swatchGroup.getAllSwatches();
+
+        if (_swatchGroup.name !== "" && _swatches.length > 0)
+        {
+            pieSwatchGroups_list.push(_swatchGroup.name);
+            /*
+            var _swatches = _swatchGroup.getAllSwatches();
+            for (var j = 0; j < _swatches.length; j++)
+            {
+                $.writeln("swatch " + _swatches[j].name);
+            }
+            */
+        }
+    }
 
 // DIALOG
 // ======
 var dialog = new Window("dialog", "Line Pie Chart Maker", undefined); 
+    dialog.orientation = "row"; 
     dialog.alignChildren = ["center","top"]; 
     dialog.spacing = 10; 
     dialog.margins = 16; 
@@ -91,30 +121,38 @@ var pieData_edit = panel1.add('edittext {properties: {name: "pieData_edit"}}');
 
 // PIE UNITS
 // ======
-var group2 = panel1.add("group", undefined, {name: "group2"}); 
-    group2.orientation = "row"; 
-    group2.alignChildren = ["left","center"]; 
-    group2.spacing = 10; 
-    group2.margins = 0; 
 
-var pieDataUnits_txt = group2.add("statictext", undefined, undefined, {name: "pieDataUnits_txt"}); 
+var pieDataUnits_txt = panel1.add("statictext", undefined, undefined, {name: "pieDataUnits_txt"}); 
     pieDataUnits_txt.helpTip = "Add name of the units to display beside each number in the pie chart."; 
-    pieDataUnits_txt.text = "Data Units"; 
+    pieDataUnits_txt.text = "Data Units (Comma Separated, Optional)"; 
 
 var firstRunPieDataUnits = true;
-var pieDataUnits_edit = group2.add('edittext {properties: {name: "pieDataUnits_edit"}}'); 
+var pieDataUnits_edit = panel1.add('edittext {properties: {name: "pieDataUnits_edit"}}'); 
+    pieDataUnits_edit.preferredSize.width = 255; 
     pieDataUnits_edit.helpTip = "Add name of the units to display beside each number in the pie chart."; 
-    pieDataUnits_edit.text = "apples , oranges, etc."; 
+    pieDataUnits_edit.text = "apples, figs, pears, kiwis, grapes"; 
     pieDataUnits_edit.onActivate = function()
     {
         if (firstRunPieDataUnits)
         {
             this.text = "";
+            pieDataUnitList = "";
             firstRunPieDataUnits = false;
         }
     };
     pieDataUnits_edit.onChange = function()
     {
+        pieDataUnitList = (this.text.replace(/\s*/g,'')).split(",");
+        if (pieDataUnitList.length !== pieDataList.length && this.text.replace(/\s/g,'') !== "")
+        {
+            pieDataUnits = false;
+            alert("Data unit count doesn't match data value count.")
+            
+        }
+        else if (this.text.replace(/\s/g,'') === "")
+        {
+            pieDataUnits = true;
+        }
         validateInputs(pieOK_button);
     }
 
@@ -128,8 +166,8 @@ var group3 = panel1.add("group", undefined, {name: "group3"});
 
 var pieDisplayPercent_chbx = group3.add("checkbox", undefined, undefined, {name: "pieDisplayPercent_chbx"}); 
     pieDisplayPercent_chbx.helpTip = "When checked pie chart will show percentage instead of data values."; 
-    pieDisplayPercent_chbx.text = "Display percentages"; 
-    pieDisplayPercent_chbx.preferredSize.width = 140; 
+    pieDisplayPercent_chbx.text = "Display percentages instead"; 
+    pieDisplayPercent_chbx.preferredSize.width = 255; 
     pieDisplayPercent_chbx.onClick = function()
     {
         pieDataUnits_edit.enabled = !this.value;
@@ -287,32 +325,131 @@ var statictext10 = group6.add("statictext", undefined, undefined, {name: "static
     statictext10.preferredSize.width = 20; 
     statictext10.justify = "center"; 
 
-// OK / Canel Buttons
+
+// STYLEGROUP
+// ==========
+var styleGroup = dialog.add("group", undefined, {name: "styleGroup"}); 
+    styleGroup.orientation = "column"; 
+    styleGroup.alignChildren = ["left","center"]; 
+    styleGroup.spacing = 10; 
+    styleGroup.margins = 0; 
+
+// PANEL2
 // ======
-var group7 = dialog.add("group", undefined, {name: "group7"}); 
+var panel2 = styleGroup.add("panel", undefined, undefined, {name: "panel2"}); 
+    panel2.text = "Pie Chart Style"; 
+    panel2.orientation = "column"; 
+    panel2.alignChildren = ["left","top"]; 
+    panel2.spacing = 10; 
+    panel2.margins = 10; 
+
+// STROKE WIGHT 
+// ======
+var group7 = panel2.add("group", undefined, {name: "group7"}); 
     group7.orientation = "row"; 
     group7.alignChildren = ["left","center"]; 
-    group7.spacing = 14; 
+    group7.spacing = 10; 
     group7.margins = 0; 
 
-var pieOK_button = group7.add("button", undefined, undefined, {name: "ok_button"}); 
+var statictext11 = group7.add("statictext", undefined, undefined, {name: "statictext11"}); 
+    statictext11.text = "Stroke Weight:"; 
+    statictext11.preferredSize.width = 92; 
+
+var pieStroke_edit = group7.add('edittext {properties: {name: "pieStroke_edit"}}'); 
+    pieStroke_edit.text = "5"; 
+    pieStroke_edit.preferredSize.width = 64;
+    pieStroke_edit.addEventListener ('keydown', keyboardPositiveFloat, false);
+    pieStroke_edit.onChange = function()
+    {
+        if (this.text == "") {this.text = "5"}
+        if (parseFloat(this.text) !== NaN)
+        {
+            pieStroke = true;
+        }
+        else
+        {
+            alert(this.text + " is not a valid number.");
+            pieStroke = false;
+        }
+       validateInputs(pieOK_button);
+    }
+
+var statictext12 = group7.add("statictext", undefined, undefined, {name: "statictext12"}); 
+    statictext12.text = "pt";
+
+// STROKE CAP TYPE
+// ======
+var group9 = panel2.add("group", undefined, {name: "group9"}); 
+    group9.orientation = "row"; 
+    group9.alignChildren = ["left","center"]; 
+    group9.spacing = 10; 
+    group9.margins = 0; 
+
+var statictext13 = group9.add("statictext", undefined, undefined, {name: "statictext13"}); 
+    statictext13.text = "Stroke Cap:"; 
+    statictext13.preferredSize.width = 92; 
+
+var pieStrokeCap_list = ["Butt","Round"]; 
+var pieStrokeCap_dd = group9.add("dropdownlist", undefined, undefined, {name: "dropdown1", items: pieStrokeCap_list}); 
+    pieStrokeCap_dd.selection = 0; 
+    pieStrokeCap_dd.preferredSize.width = 90; 
+    pieStrokeCap_dd.onChange = function() 
+    {
+        pieStrokeCap = strokeCapList[this.selection];
+    };
+
+// SWATCH GROUP SELECTION
+// ======
+var divider3 = panel2.add("panel", undefined, undefined, {name: "divider3"}); 
+    divider3.alignment = "fill"; 
+
+var statictext14 = panel2.add("statictext", undefined, undefined, {name: "statictext14"}); 
+    statictext14.text = "Colours from Swatch Group: "; 
+    statictext14.preferredSize.width = 174; 
+
+var pieSwatchGroup_dd = panel2.add("dropdownlist", undefined, undefined, {name: "dropdown2", items: pieSwatchGroups_list}); 
+    pieSwatchGroup_dd.selection = 0; 
+    pieSwatchGroup_dd.preferredSize.width = 175;
+    pieSwatchGroup_dd.onChange = function() 
+    {
+        try 
+        {
+            pieSwatchList = docSwatchGroups.getByName(this.selection).getAllSwatches();
+        }
+        catch(err)
+        {
+            pieSwatchList = null;
+        }
+    };
+
+
+// OK / Canel Buttons
+// ======
+var group10 = styleGroup.add("group", undefined, {name: "group10"}); 
+    group10.orientation = "row"; 
+    group10.alignChildren = ["left","center"]; 
+    group10.spacing = 14; 
+    group10.margins = [18,83,18,0]; 
+    group10.alignment = ["center","center"]; 
+
+var pieOK_button = group10.add("button", undefined, undefined, {name: "ok_button"}); 
     pieOK_button.text = "OK"; 
     pieOK_button.preferredSize.width = 64;
     pieOK_button.onClick = function()
     {
-        var doc = app.activeDocument;
+      
         var spacer = parseFloat(pieSpacer_edit.text);
         var radius = parseFloat(pieRadius_edit.text);
         var cx = parseFloat(pieX_edit.text);
         var cy = parseFloat(pieY_edit.text);
-        var pieUnits = pieDataUnits_edit.text;
         var piePercent = pieDisplayPercent_chbx.value;
-
-        createPieChart(doc, pieDataList, spacer, cx, cy, radius, pieUnits, piePercent);
+        var pieStrokeWeight = parseFloat(pieStroke_edit.text);
+        
+        createPieChart(doc, pieDataList, spacer, cx, cy, radius, pieDataUnitList, piePercent, pieStrokeWeight, pieStrokeCap, pieSwatchList);
         dialog.close();
     }
 
-var pieCancel_button = group7.add("button", undefined, undefined, {name: "cancel_button"}); 
+var pieCancel_button = group10.add("button", undefined, undefined, {name: "cancel_button"}); 
     pieCancel_button.text = "Cancel"; 
     pieCancel_button.preferredSize.width = 64; 
     pieCancel_button.onClick = function()
@@ -408,7 +545,7 @@ function keyboardFloat (event)
 // check if inputs are valid
 function validateInputs( button )
 {
-    if (pieData == true && pieRadius == true && pieX == true && pieY == true && pieSpacer == true && app.documents.length > 0) {button.enabled = true;}
+    if (pieData == true && pieDataUnits == true && pieRadius == true && pieX == true && pieY == true && pieSpacer == true && pieStroke == true && app.documents.length > 0) {button.enabled = true;}
     else {button.enabled = false;}
 }
 

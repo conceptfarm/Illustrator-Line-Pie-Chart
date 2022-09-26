@@ -1,4 +1,5 @@
 ﻿// TODO: 
+// maintain spacing when lineweight is increased and cap is set to round
 
 ///////////////////////
 // GENERAL FUNCTIONS //
@@ -567,7 +568,18 @@ function splitAngle(angle, startAngle)
 }
 
 // Main function
-function createPieChart(doc, vals, spacer, cx, cy, radius, pieUnits, piePercent)
+// doc: document object to draw on
+// vals: list of float values of the pie chart
+// spacer: float in degrees of the space between the pie pieces
+// cx: float pie centre x position
+// cy: float pie centre y position
+// radius: float radius of the pie chart
+// pieDataUnitList: list of strings representing units of each pie value
+// piePercent: boolean if true represent each value as a percent 
+// pieStrokeWeight: float the thickness of the line of the pie chart
+// pieCapType: cap type object - sets the cap of the line of the pie chart
+// pieSwatchList: list of swatch objects containing the swatch colours to use for pie pieces
+function createPieChart(doc, vals, spacer, cx, cy, radius, pieDataUnitList, piePercent , pieStrokeWeight, pieCapType, pieSwatchList)
 {
     if (app.documents.length > 0) 
     {
@@ -576,25 +588,47 @@ function createPieChart(doc, vals, spacer, cx, cy, radius, pieUnits, piePercent)
         //var ellipse = doc.pathItems.ellipse(cy + radius, cx - radius, radius*2.0, radius*2.0);    
         //ellipse.strokeColor = colorFromRGB(0,0,255);
         
+
         var valSum = getArraySum(vals);
         var pieAngles = getPieAngles(vals, valSum, spacer);
         var pieGroup = doc.groupItems.add();
-
-        for ( var i=0; i<pieAngles.length; i++)
+        
+        for ( var i = 0; i < pieAngles.length; i++)
         {
             var arc = drawArc (doc, cx, cy,  pieAngles[i][0], radius, pieAngles[i][1]);
+            
             arc.fillColor = noColor; 
-            var arcColour =  colorFromRGB(Math.random()*255,Math.random()*255,Math.random()*255);
+            var arcColour;
+            if (pieSwatchList === null)
+            {
+                arcColour = colorFromRGB(Math.random()*255,Math.random()*255,Math.random()*255);
+            }
+            else
+            {
+                var _index = i % pieSwatchList.length;
+                arcColour = pieSwatchList[_index].color;
+            }
+
             arc.strokeColor = arcColour;
+            arc.strokeCap = pieCapType;
+            arc.strokeWidth = pieStrokeWeight;
             arc.moveToEnd(pieGroup);
             
-            //var textString = ("index: " + i + " value: " + vals[i] + "\nstart " + pieAngles[i][0] + "\npie angle: " + pieAngles[i][1]);
-            var pieText = vals[i] +"\n" + pieUnits;
+            
+            var pieText = vals[i];
+            if ( pieDataUnitList !== "" )
+            {
+                if (pieDataUnitList[i] !== "")
+                {
+                    pieText = pieText + "\n" + pieDataUnitList[i];
+                }
+            }
+
             if (piePercent)
             {
                 pieText = Math.floor(vals[i]/valSum * 100) + "%";
             }
-            var nt = drawText(doc, cx, cy, radius, (pieAngles[i][0] + pieAngles[i][1]/2.0), pieText, arcColour); 
+            var nt = drawText(doc, cx, cy, (radius + pieStrokeWeight/2.0), (pieAngles[i][0] + pieAngles[i][1]/2.0), pieText, arcColour); 
             nt.moveToEnd(pieGroup);       
         }
     }
