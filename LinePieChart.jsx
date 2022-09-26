@@ -1,5 +1,6 @@
 ﻿// TODO: 
-// maintain spacing when lineweight is increased and cap is set to round
+// save previous settings and data
+// fonts ?
 
 ///////////////////////
 // GENERAL FUNCTIONS //
@@ -505,35 +506,6 @@ function getAnchor(theta, textBox)
 
     return justificationStyle;
 }
-/*
-function getAnchor_old(theta, textBox) 
-{
-    var justificationStyle;
-
-    // +/- off axial angles in degrees where the text alignment is centred
-    var angleVar = 2.5; 
-    switch(true) 
-    {
-        case ((theta > 0 && theta < angleVar) || (theta > 360-angleVar && theta < 360)) : justificationStyle =  Justification.LEFT ; break;
-
-        case (theta > angleVar && theta < 90-angleVar) : justificationStyle = Justification.LEFT ; break;
-
-        case (theta > 90-angleVar && theta < 90+angleVar) : justificationStyle =  Justification.CENTER ; break;
-
-        case (theta > 90+angleVar && theta < 180-angleVar) : justificationStyle = Justification.RIGHT ; break;
-
-        case (theta > 180-angleVar && theta < 180+angleVar) : justificationStyle = Justification.RIGHT ; break;
-
-        case (theta > 180+angleVar && theta < 270-angleVar) : justificationStyle = Justification.RIGHT ; break;
-
-        case (theta > 270-angleVar && theta < 270+angleVar) : justificationStyle = Justification.CENTER ; break;
-
-        case (theta > 270+angleVar && theta < 360-angleVar) : justificationStyle = Justification.LEFT ; break;
-    }
-
-    return justificationStyle;
-}
-*/
 
 // Takes list of values of each pie and a spacer angle
 // Returns list of start angle and theta for each pie value
@@ -588,28 +560,37 @@ function createPieChart(doc, vals, spacer, cx, cy, radius, pieDataUnitList, pieP
         //var ellipse = doc.pathItems.ellipse(cy + radius, cx - radius, radius*2.0, radius*2.0);    
         //ellipse.strokeColor = colorFromRGB(0,0,255);
         
+        // If the stroke cap is round the spacing needs 
+        // to change to accommodate the end cap
+        if (pieCapType == "StrokeCap.ROUNDENDCAP")
+        {
+            var strokeToDegrees = (pieStrokeWeight/2.0 * 180.0) / (Math.PI * radius);
+            spacer = spacer + 2.0 * strokeToDegrees;
+            //$.writeln("new spacer is " + spacer);
+        }
 
         var valSum = getArraySum(vals);
         var pieAngles = getPieAngles(vals, valSum, spacer);
         var pieGroup = doc.groupItems.add();
+        var pieColour;
+
         
         for ( var i = 0; i < pieAngles.length; i++)
         {
             var arc = drawArc (doc, cx, cy,  pieAngles[i][0], radius, pieAngles[i][1]);
-            
             arc.fillColor = noColor; 
-            var arcColour;
+            
             if (pieSwatchList === null)
             {
-                arcColour = colorFromRGB(Math.random()*255,Math.random()*255,Math.random()*255);
+                pieColour = colorFromRGB(Math.random()*255,Math.random()*255,Math.random()*255);
             }
             else
             {
                 var _index = i % pieSwatchList.length;
-                arcColour = pieSwatchList[_index].color;
+                pieColour = pieSwatchList[_index].color;
             }
 
-            arc.strokeColor = arcColour;
+            arc.strokeColor = pieColour;
             arc.strokeCap = pieCapType;
             arc.strokeWidth = pieStrokeWeight;
             arc.moveToEnd(pieGroup);
@@ -628,7 +609,7 @@ function createPieChart(doc, vals, spacer, cx, cy, radius, pieDataUnitList, pieP
             {
                 pieText = Math.floor(vals[i]/valSum * 100) + "%";
             }
-            var nt = drawText(doc, cx, cy, (radius + pieStrokeWeight/2.0), (pieAngles[i][0] + pieAngles[i][1]/2.0), pieText, arcColour); 
+            var nt = drawText(doc, cx, cy, (radius + pieStrokeWeight/2.0), (pieAngles[i][0] + pieAngles[i][1]/2.0), pieText, pieColour); 
             nt.moveToEnd(pieGroup);       
         }
     }
